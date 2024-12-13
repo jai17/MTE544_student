@@ -1,5 +1,8 @@
 import sys
 
+import numpy as np
+from probabilistic_road_map import *
+
 from utilities import euler_from_quaternion, calculate_angular_error, calculate_linear_error
 from pid import PID_ctrl
 
@@ -37,10 +40,13 @@ class decision_maker(Node):
 
         self.reachThreshold=0.1
 
+        self.actual_path = []
+        self.last_recorded_pose = None
+        self.min_distance_threshold = 0.25  # 1 meter threshold
 
         # [Part 4] TODO Use the EKF localization instead of rawSensors
-        self.localizer=localization(rawSensors)
-
+        # self.localizer=localization(rawSensors)
+        self.localizer=localization(kalmanFilter)
 
         self.goal = None
 
@@ -88,18 +94,26 @@ class decision_maker(Node):
             print("waiting for odom msgs ....")
             return
         
-        
         vel_msg=Twist()
         
         if self.goal is None:
             return
         
+        # Record the robot's path if it has moved enough
+        current_pose = self.localizer.getPose()
+        if self.last_recorded_pose is None:
+            self.last_recorded_pose = current_pose
+            self.actual_path.append([current_pose[0], current_pose[1]])
+        else:
+            distance = calculate_linear_error(current_pose, self.last_recorded_pose)
+            if distance >= self.min_distance_threshold:
+                self.actual_path.append([current_pose[0], current_pose[1]])
+                self.last_recorded_pose = current_pose
+        
         if type(self.goal) == list:
             reached_goal=True if calculate_linear_error(self.localizer.getPose(), self.goal[-1]) <self.reachThreshold else False
         else: 
             reached_goal=True if calculate_linear_error(self.localizer.getPose(), self.goal) <self.reachThreshold else False
-
-
 
 
         if reached_goal:
@@ -108,6 +122,27 @@ class decision_maker(Node):
             
             self.controller.PID_angular.logger.save_log()
             self.controller.PID_linear.logger.save_log()
+
+            # Convert list of lists to numpy array for plotting
+            path_array = np.array(self.actual_path)
+            planned_path = np.array(self.goal)
+            
+            # plt.title("Planned vs Executed Path with PRM-A*")
+            plt.title("Planned vs Executed Path with A*")
+            plt.plot(self.planner.obstaclesList[:,0], self.planner.obstaclesList[:,1], '.', label="Obstacles")
+            plt.plot(planned_path[:,0], planned_path[:,1], '-*', label="Planned Path")
+            plt.plot(self.localizer.getPose()[0], self.localizer.getPose()[1], '*', label="Start")
+            plt.plot(path_array[:, 0], path_array[:, 1], '-*', color='red', label="Executed Path")
+            plt.plot(planned_path[-1][0], planned_path[-1][1], '*', label="Goal")
+            plt.plot(planned_path[0][0], planned_path[0][1], '*', label="Start")
+
+            plt.legend()
+            plt.savefig("planned_vs_executed_path_prm.png")
+            # plt.show()
+
+            # Reset path tracking for next goal
+            self.actual_path = []
+            self.last_recorded_pose = None
             
             self.goal = None
             print("waiting for the new position input, use 2D nav goal on map")
@@ -123,8 +158,6 @@ class decision_maker(Node):
         
         self.publisher.publish(vel_msg)
         self.publishPathOnRviz2(self.goal)
-
-
 
     def publishPathOnRviz2(self, path):
 
@@ -159,6 +192,7 @@ def main(args=None):
     odom_qos=QoSProfile(reliability=2, durability=2, history=1, depth=10)
 
     # Set the desired planner here
+    # DM=decision_maker(Twist, "/cmd_vel", 10, motion_type=ASTAR_PLANNER)
     DM=decision_maker(Twist, "/cmd_vel", 10, motion_type=PRM_PLANNER)
 
     try:

@@ -216,6 +216,74 @@ def search_PRM(points, prm, start, end):
 
     path_points = []
 
-    ...
+    # Initialize open and closed lists
+    yet_to_visit_dict = {}
+    visited_dict = {}
+
+    # Add the start node
+    yet_to_visit_dict[start_node.position] = start_node
     
-    return path_points
+    # Add a stop condition
+    outer_iterations = 0
+    max_iterations = len(points) * len(points)
+    
+    while len(yet_to_visit_dict) > 0:
+        outer_iterations += 1
+        
+        # Get the current node with lowest f score
+        current_node = min(yet_to_visit_dict.values(), key=lambda x: x.f)
+        
+        if outer_iterations > max_iterations:
+            print("giving up on pathfinding too many iterations")
+            break
+
+        # Remove current node from yet_to_visit and add to visited
+        yet_to_visit_dict.pop(current_node.position)
+        visited_dict[current_node.position] = True
+
+        # Found the goal
+        if current_node.position == end_node.position:
+            path = []
+            current = current_node
+            while current is not None:
+                path.append(points[current.position])
+                current = current.parent
+            return path[::-1]  # Return reversed path
+
+        # Generate children from PRM connections
+        children = []
+        for neighbor_idx in range(len(prm[current_node.position])):
+            neighbor = prm[current_node.position][neighbor_idx]
+            new_node = Node(current_node, neighbor)
+            children.append(new_node)
+
+        # Loop through children
+        for child in children:
+            # Skip if child is visited
+            if visited_dict.get(child.position, False):
+                continue
+
+            # Calculate costs
+            # g cost is the distance from start to current node plus the distance to the child
+            child.g = current_node.g + sqrt(
+                (points[child.position][0] - points[current_node.position][0]) ** 2 +
+                (points[child.position][1] - points[current_node.position][1]) ** 2
+            )
+            
+            # h cost is the straight-line distance to end
+            child.h = sqrt(
+                (points[child.position][0] - points[end_idx][0]) ** 2 +
+                (points[child.position][1] - points[end_idx][1]) ** 2
+            )
+            
+            child.f = child.g + child.h
+
+            # Skip if child is in yet_to_visit with a lower g cost
+            child_in_yet_to_visit = yet_to_visit_dict.get(child.position, False)
+            if child_in_yet_to_visit and child_in_yet_to_visit.g <= child.g:
+                continue
+
+            # Add the child to yet_to_visit
+            yet_to_visit_dict[child.position] = child
+
+    return []  # No path found

@@ -47,7 +47,18 @@ class planner:
         # [Part 3] TODO Use the PRM and search_PRM to generate the path
         # Hint: see the example of the ASTAR case below, there is no scaling factor for PRM
         if type == PRM_PLANNER:
-            ...
+            start_time = time.time()
+            robot_radius = 0.2 # From here and modified to work with the robot: https://en.robotis.com/model/page.php?co_id=prd_turtlebot3
+            # Generate the PRM graph
+            points, prm = prm_graph([startPose[0], startPose[1]], [endPose[0], endPose[1]], self.obstaclesListCell, robot_radius, rng=None, m_utilities=self.m_utilities)
+            # Search the PRM graph for the path using A*
+            path_ = search_PRM(points, prm, startPose, endPose)
+            end_time = time.time()
+            print(f"The time took for PRM-A* calculation was {end_time - start_time}")
+            path_length = 0
+            for i in range(len(path_) - 1):
+                path_length += np.linalg.norm(np.array(path_[i]) - np.array(path_[i + 1]))
+            print(f"The path length from PRM-A* is {path_length}")
 
         elif type == ASTAR_PLANNER: # This is the same planner you should have implemented for Lab4
             scale_factor = 4 # Depending on resolution, this can be smaller or larger
@@ -59,21 +70,28 @@ class planner:
 
             end_time = time.time()
 
-
-            print(f"the time took for a_star calculation was {end_time - start_time}")
+            print(f"The time took for A* calculation was {end_time - start_time}")
 
             path_ = [[x*scale_factor, y*scale_factor] for x,y in path ]
+
+            path_length = 0
+            for i in range(len(path_) - 1):
+                path_length += np.linalg.norm(np.array(path_[i]) - np.array(path_[i + 1]))
+            print(f"The path length from A* is {path_length}")
 
         Path = np.array(list(map(self.m_utilities.cell_2_position, path_ )))
 
         # Plot the generated path
-        plt.plot(self.obstaclesList[:,0], self.obstaclesList[:,1], '.')
-        plt.plot(Path[:,0], Path[:,1], '-*')
-        plt.plot(startPoseCart[0],startPoseCart[1],'*')
+        # plt.title("Planned Path with PRM-A*")
+        plt.title("Planned Path with A*")
+        plt.plot(self.obstaclesList[:,0], self.obstaclesList[:,1], '.', label="Obstacles")
+        plt.plot(Path[:,0], Path[:,1], '-*', label="Path")
+        plt.plot(startPoseCart[0],startPoseCart[1],'*', label="Start")
         plt.plot(endPoseCart[0],
-                 endPoseCart[1], '*')
-
-        plt.show()
+                 endPoseCart[1], '*', label="Goal")
+        plt.legend()
+        plt.savefig("planned_path.png")
+        # plt.show()
         
         return Path.tolist()
     
